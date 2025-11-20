@@ -7,12 +7,33 @@ auth_bp = Blueprint('auth_bp', __name__, url_prefix='/auth')
 @auth_bp.post('/register')
 @swag_from({
     "tags": ["Auth"],
+    "summary": "Register a new user",
+    "description": "Creates a new user account using email, password, and optional role.",
+    "consumes": ["application/json"],
     "parameters": [
-        {"name": "email", "in": "formData", "type": "string", "required": True},
-        {"name": "password", "in": "formData", "type": "string", "required": True},
-        {"name": "role", "in": "formData", "type": "string", "required": False}
+        {
+            "in": "body",
+            "name": "body",
+            "required": True,
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "email": {"type": "string"},
+                    "password": {"type": "string"},
+                    "role": {"type": "string"}
+                },
+                "required": ["email", "password"]
+            }
+        }
     ],
-    "responses": {200: {"description": "User registered successfully"}}
+    "responses": {
+        "200": {
+            "description": "User registered successfully"
+        },
+        "400": {
+            "description": "Validation error"
+        }
+    }
 })
 def register():
     data = request.json
@@ -22,11 +43,28 @@ def register():
 @auth_bp.post('/login')
 @swag_from({
     "tags": ["Auth"],
+    "summary": "Login a user",
+    "description": "Authenticates a user with email and password and returns a JWT token.",
+    "consumes": ["application/json"],
     "parameters": [
-        {"name": "email", "in": "formData", "type": "string", "required": True},
-        {"name": "password", "in": "formData", "type": "string", "required": True}
+        {
+            "in": "body",
+            "name": "body",
+            "required": True,
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "email": {"type": "string"},
+                    "password": {"type": "string"}
+                },
+                "required": ["email", "password"]
+            }
+        }
     ],
-    "responses": {200: {"description": "Login successful"}}
+    "responses": {
+        "200": {"description": "Login successful"},
+        "401": {"description": "Invalid credentials"}
+    }
 })
 def login():
     data = request.json

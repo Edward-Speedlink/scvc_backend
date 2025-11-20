@@ -11,6 +11,8 @@ class Certificate(db.Model):
     verification_code = db.Column(db.String(100), unique=True, nullable=False)
     pdf_url = db.Column(db.String(500))
     is_active = db.Column(db.Boolean, default=True)
+    image_url = db.Column(db.String(500))
+
 
     def __repr__(self):
         return f"<Certificate {self.verification_code}>"
