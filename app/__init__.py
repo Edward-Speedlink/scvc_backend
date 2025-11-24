@@ -64,8 +64,8 @@ def create_app():
 
 
      # Base URL route — quick server check
-    @app.route("/", methods=["GET"])
-    def home():
+    @app.route("/")
+    def index():
         return jsonify({
             "status": "live",
             "message": "PARADOX backend running successfully on Speedlink server!",

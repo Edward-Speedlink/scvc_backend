@@ -9,5 +9,7 @@ class VerificationLog(db.Model):
     verified_at = db.Column(db.DateTime, default=datetime.utcnow)
     ip_address = db.Column(db.String(50))
     status = db.Column(db.String(20))  # VALID / INVALID / EXPIRED
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     certificate = db.relationship('Certificate', backref='verification_logs')

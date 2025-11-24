@@ -12,6 +12,11 @@ class Certificate(db.Model):
     pdf_url = db.Column(db.String(500))
     is_active = db.Column(db.Boolean, default=True)
     image_url = db.Column(db.String(500))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # verification_logs = db.relationship('VerificationLog', backref='certificate', lazy=True)
+
 
 
     def __repr__(self):

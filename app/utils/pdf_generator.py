@@ -19,6 +19,7 @@ def generate_certificate_pdf(student_name, course_name, verification_code, outpu
 
     # QR code
     qr = qrcode.QRCode(box_size=10, border=2)
+    # https://speedlinktraining.com/verify/admin  - - Real URL
     qr.add_data(f"https://speedlinkng.com/certificate/{verification_code}")
     qr.make(fit=True)
     img = qr.make_image(fill_color="black", back_color="white")
