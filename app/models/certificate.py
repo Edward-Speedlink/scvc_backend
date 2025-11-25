@@ -5,6 +5,7 @@ class Certificate(db.Model):
     __tablename__ = "certificates"
 
     id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
     student_first_name = db.Column(db.String(100), nullable=False)
     student_last_name = db.Column(db.String(100), nullable=False)
     course_name = db.Column(db.String(255), nullable=False)
