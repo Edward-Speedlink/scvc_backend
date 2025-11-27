@@ -68,7 +68,32 @@ def register():
         }
     ],
     "responses": {
-        "200": {"description": "Login successful"},
+        "200": {
+            "description": "Login successful",
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "message": {"type": "string"},
+                    "user": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "integer"},
+                            "first_name": {"type": "string"},
+                            "last_name": {"type": "string"},
+                            "email": {"type": "string"},
+                            "phone_number": {"type": "string"},
+                            "responsibility": {"type": "string"},
+                            "year_of_employment": {"type": "string"},
+                            "role": {"type": "string"},
+                            "staff_id": {"type": "string"},
+                            "created_at": {"type": "string"},
+                            "access_token": {"type": "string"}
+                        }
+                    }
+                }
+            }
+        },
+        "400": {"description": "Missing credentials"},
         "401": {"description": "Invalid credentials"}
     }
 })

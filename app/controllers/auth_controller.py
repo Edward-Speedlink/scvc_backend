@@ -63,9 +63,44 @@ def login_user(data):
     email = data.get('email')
     password = data.get('password')
 
+    if not email or not password:
+        return {"message": "Email and password are required"}, 400
+
     user = User.query.filter_by(email=email).first()
+
     if user and user.check_password(password):
-        token = create_access_token(identity={"id": user.id, "role": user.role})
-        return {"access_token": token}
+        # Create access token
+        access_token = create_access_token(identity=user.id)
+        
+        # Return all user information along with token
+        user_data = {
+            "id": user.id,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "email": user.email,
+            "phone_number": user.phone_number,
+            "responsibility": user.responsibility,
+            "year_of_employment": user.year_of_employment,
+            "role": user.role,
+            "staff_id": user.staff_id,
+            "created_at": user.created_at.isoformat() if user.created_at else None,
+            "access_token": access_token
+        }
+        
+        return {
+            "message": "Login successful",
+            "user": user_data
+        }, 200
     else:
-        return {"message": "Invalid credentials"}, 401
+        return {"message": "Invalid email or password"}, 401
+    
+# def login_user(data):
+#     email = data.get('email')
+#     password = data.get('password')
+
+#     user = User.query.filter_by(email=email).first()
+#     if user and user.check_password(password):
+#         token = create_access_token(identity={"id": user.id, "role": user.role})
+#         return {"access_token": token}
+#     else:
+#         return {"message": "Invalid credentials"}, 401
