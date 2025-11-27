@@ -9,55 +9,13 @@ import csv
 from io import StringIO
 import pandas as pd
 from io import BytesIO, StringIO
-
-
-# # ===================================
-# # CREATE CERTIFICATE
-# # ===================================
-# def create_certificate():
-#     data = request.get_json()
-
-#     first_name = data.get("first_name")
-#     last_name = data.get("last_name")
-#     course_name = data.get("course_name")
-#     course_summary = data.get("course_summary")
-#     year_of_study = data.get("year_of_study")
-#     issuance_date = data.get("issuance_date")  # frontend controls this
-
-#     # Generate cert number (course code is optional now)
-#     certificate_number = generate_certificate_number(course_name)
-
-#     # Generate QR
-#     qr_path = generate_certificate_qr(
-#         f"{first_name} {last_name}",
-#         course_name,
-#         certificate_number,
-#         issuance_date
-#     )
-
-#     cert = Certificate(
-#         student_first_name=first_name,
-#         student_last_name=last_name,
-#         course_name=course_name,
-#         course_summary=course_summary,
-#         year_of_study=year_of_study,
-#         verification_code=certificate_number,
-#         qr_code_url=qr_path,
-#         issued_at=issuance_date,
-#     )
-
-#     db.session.add(cert)
-#     db.session.commit()
-
-#     return jsonify({
-#         "message": "Certificate created successfully",
-#         "certificate_number": certificate_number,
-#     }), 201
+from datetime import datetime
 
 
 # ===================================
 # CREATE CERTIFICATE
 # ===================================
+
 def create_certificate():
     data = request.get_json()
 
@@ -66,8 +24,23 @@ def create_certificate():
     course_name = data.get("course_name")
     course_summary = data.get("course_summary")
     year_of_study = data.get("year_of_study")
-    issuance_date = data.get("issuance_date")
+    issuance_date_str = data.get("issuance_date")  # This comes as string from frontend
     
+    # Convert issuance_date string to date object
+    if issuance_date_str:
+        try:
+            # Handle different date formats (YYYY-MM-DD, DD/MM/YYYY, etc.)
+            issuance_date = datetime.strptime(issuance_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            try:
+                issuance_date = datetime.strptime(issuance_date_str, '%d/%m/%Y').date()
+            except ValueError:
+                # If parsing fails, use current date
+                issuance_date = datetime.now().date()
+    else:
+        # If no date provided, use current date
+        issuance_date = datetime.now().date()
+
     # NEW: Find or create student
     student = Student.query.filter_by(
         first_name=first_name,
@@ -91,12 +64,12 @@ def create_certificate():
     # Generate cert number
     certificate_number = generate_certificate_number(course_name)
 
-    # Generate QR
+    # Generate QR - now passing date object instead of string
     qr_path = generate_certificate_qr(
         f"{first_name} {last_name}",
         course_name,
         certificate_number,
-        issuance_date
+        issuance_date  # Now this is a date object, not a string
     )
 
     cert = Certificate(
@@ -108,7 +81,7 @@ def create_certificate():
         year_of_study=year_of_study,
         verification_code=certificate_number,
         qr_code_url=qr_path,
-        issued_at=issuance_date,
+        issued_at=issuance_date,  # Use the date object here too
     )
 
     db.session.add(cert)
@@ -119,6 +92,68 @@ def create_certificate():
         "certificate_number": certificate_number,
         "student_id": student.id  # NEW: Return student ID
     }), 201
+
+# def create_certificate():
+#     data = request.get_json()
+
+#     first_name = data.get("first_name")
+#     last_name = data.get("last_name")
+#     course_name = data.get("course_name")
+#     course_summary = data.get("course_summary")
+#     year_of_study = data.get("year_of_study")
+#     issuance_date = data.get("issuance_date")
+    
+#     # NEW: Find or create student
+#     student = Student.query.filter_by(
+#         first_name=first_name,
+#         last_name=last_name,
+#         email=data.get("email")  # You might want to add email to your form
+#     ).first()
+    
+#     # If student doesn't exist, create one
+#     if not student:
+#         student = Student(
+#             first_name=first_name,
+#             last_name=last_name,
+#             email=data.get("email", f"{first_name}.{last_name}@example.com"),  # Default email
+#             phone_number=data.get("phone_number"),
+#             course_name=course_name,
+#             year_of_study=year_of_study
+#         )
+#         db.session.add(student)
+#         db.session.flush()  # This gets the student ID without committing
+
+#     # Generate cert number
+#     certificate_number = generate_certificate_number(course_name)
+
+#     # Generate QR
+#     qr_path = generate_certificate_qr(
+#         f"{first_name} {last_name}",
+#         course_name,
+#         certificate_number,
+#         issuance_date
+#     )
+
+#     cert = Certificate(
+#         student_id=student.id,  # NEW: Add student_id
+#         student_first_name=first_name,  # Keep for backward compatibility
+#         student_last_name=last_name,    # Keep for backward compatibility
+#         course_name=course_name,
+#         course_summary=course_summary,
+#         year_of_study=year_of_study,
+#         verification_code=certificate_number,
+#         qr_code_url=qr_path,
+#         issued_at=issuance_date,
+#     )
+
+#     db.session.add(cert)
+#     db.session.commit()
+
+#     return jsonify({
+#         "message": "Certificate created successfully",
+#         "certificate_number": certificate_number,
+#         "student_id": student.id  # NEW: Return student ID
+#     }), 201
 
 
 # ===================================

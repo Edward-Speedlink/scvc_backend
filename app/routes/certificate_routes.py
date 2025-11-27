@@ -19,21 +19,36 @@ certificate_bp = Blueprint('certificate_bp', __name__, url_prefix='/certificate'
             "schema": {
                 "type": "object",
                 "properties": {
-                    "student_name": {"type": "string"},
-                    "course_name": {"type": "string"}
+                    "first_name": {"type": "string"},
+                    "last_name": {"type": "string"},
+                    "course_name": {"type": "string"},
+                    "course_summary": {"type": "string"},
+                    "year_of_study": {"type": "string"},
+                    "issuance_date": {"type": "string", "format": "date", "description": "Date in YYYY-MM-DD format"},
+                    "email": {"type": "string"},
+                    "phone_number": {"type": "string"}
                 },
-                "required": ["student_name", "course_name"]
+                "required": ["first_name", "last_name", "course_name"]
             }
         }
     ],
     "responses": {
-        "200": {"description": "Certificate created successfully"},
+        "201": {
+            "description": "Certificate created successfully",
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "message": {"type": "string"},
+                    "certificate_number": {"type": "string"},
+                    "student_id": {"type": "integer"}
+                }
+            }
+        },
         "400": {"description": "Invalid input"}
     }
 })
 def create_cert():
     return create_certificate()
-
 
 
 @certificate_bp.get("/certificates")
