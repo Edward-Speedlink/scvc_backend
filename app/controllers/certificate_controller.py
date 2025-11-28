@@ -62,7 +62,7 @@ def create_certificate():
         db.session.flush()  # This gets the student ID without committing
 
     # Generate cert number
-    certificate_number = generate_certificate_number(course_name)
+    certificate_number = generate_certificate_number(course_name, issuance_date)
 
     # Generate QR - now passing date object instead of string
     qr_path = generate_certificate_qr(
@@ -93,68 +93,6 @@ def create_certificate():
         "student_id": student.id  # NEW: Return student ID
     }), 201
 
-# def create_certificate():
-#     data = request.get_json()
-
-#     first_name = data.get("first_name")
-#     last_name = data.get("last_name")
-#     course_name = data.get("course_name")
-#     course_summary = data.get("course_summary")
-#     year_of_study = data.get("year_of_study")
-#     issuance_date = data.get("issuance_date")
-    
-#     # NEW: Find or create student
-#     student = Student.query.filter_by(
-#         first_name=first_name,
-#         last_name=last_name,
-#         email=data.get("email")  # You might want to add email to your form
-#     ).first()
-    
-#     # If student doesn't exist, create one
-#     if not student:
-#         student = Student(
-#             first_name=first_name,
-#             last_name=last_name,
-#             email=data.get("email", f"{first_name}.{last_name}@example.com"),  # Default email
-#             phone_number=data.get("phone_number"),
-#             course_name=course_name,
-#             year_of_study=year_of_study
-#         )
-#         db.session.add(student)
-#         db.session.flush()  # This gets the student ID without committing
-
-#     # Generate cert number
-#     certificate_number = generate_certificate_number(course_name)
-
-#     # Generate QR
-#     qr_path = generate_certificate_qr(
-#         f"{first_name} {last_name}",
-#         course_name,
-#         certificate_number,
-#         issuance_date
-#     )
-
-#     cert = Certificate(
-#         student_id=student.id,  # NEW: Add student_id
-#         student_first_name=first_name,  # Keep for backward compatibility
-#         student_last_name=last_name,    # Keep for backward compatibility
-#         course_name=course_name,
-#         course_summary=course_summary,
-#         year_of_study=year_of_study,
-#         verification_code=certificate_number,
-#         qr_code_url=qr_path,
-#         issued_at=issuance_date,
-#     )
-
-#     db.session.add(cert)
-#     db.session.commit()
-
-#     return jsonify({
-#         "message": "Certificate created successfully",
-#         "certificate_number": certificate_number,
-#         "student_id": student.id  # NEW: Return student ID
-#     }), 201
-
 
 # ===================================
 # PAGINATED LIST (Optimized, no N+1)
@@ -178,7 +116,8 @@ def list_certificates():
                 "student_name": f"{c.student_first_name} {c.student_last_name}",
                 "course_name": c.course_name,
                 "verification_code": c.verification_code,
-                "issued_at": c.issued_at,
+                "issued_at": c.issued_at.strftime("%a, %d %b %Y") if c.issued_at else None,
+                "qr_code_url": c.qr_code_url,
                 # Optional: Include student email if needed
                 "student_email": c.student.email if c.student else None
             }
@@ -228,11 +167,8 @@ def import_certificates_csv():
     try:
         # Handle CSV files
         if filename.endswith('.csv'):
-            # Try different encodings for CSV files
             file_content = file.read()
-            
-            # Try common encodings
-            encodings = ['utf-8', 'latin-1', 'iso-8859-1', 'cp1252']
+            encodings = ['utf-8', 'latin-1', 'iso-8859-1', 'cp1252', 'windows-1252']
             decoded_content = None
             
             for encoding in encodings:
@@ -243,62 +179,157 @@ def import_certificates_csv():
                     continue
             
             if decoded_content is None:
-                return jsonify({"error": "Unable to decode CSV file. Please ensure it's a valid CSV with standard encoding."}), 400
+                return jsonify({"error": "Unable to decode CSV file. Try saving as UTF-8."}), 400
             
             stream = StringIO(decoded_content)
-            csv_reader = csv.DictReader(stream)
+            
+            # Try different delimiters
+            sample = decoded_content[:1000]
+            delimiter = ',' if ',' in sample else '\t' if '\t' in sample else ';'
+            
+            csv_reader = csv.DictReader(stream, delimiter=delimiter)
             rows = list(csv_reader)
 
         # Handle Excel files
         elif filename.endswith(('.xlsx', '.xls')):
-            # Read Excel file
             df = pd.read_excel(file)
-            # Convert to list of dictionaries
-            rows = df.to_dict('records')
+            rows = df.replace({pd.NA: None, float('nan'): None}).to_dict('records')
         
         else:
-            return jsonify({"error": "Unsupported file format. Please upload CSV or Excel file."}), 400
+            return jsonify({"error": "Unsupported file format."}), 400
+
+        if not rows:
+            return jsonify({"error": "No data found in file"}), 400
+
+        # Auto-detect column mapping
+        first_row = rows[0]
+        available_columns = list(first_row.keys())
+        
+        print(f"Available columns: {available_columns}")
+        print(f"First row: {first_row}")
+
+        # Auto-detect name column
+        name_column = None
+        for col in available_columns:
+            col_lower = col.lower().strip()
+            if any(keyword in col_lower for keyword in ['name', 'student', 'full']):
+                name_column = col
+                break
+        if not name_column and available_columns:
+            name_column = available_columns[0]
+
+        # Auto-detect course column
+        course_column = None
+        for col in available_columns:
+            col_lower = col.lower().strip()
+            if any(keyword in col_lower for keyword in ['department', 'course', 'program', 'dept']):
+                course_column = col
+                break
+        if not course_column and len(available_columns) > 1:
+            course_column = available_columns[1]
+
+        # Auto-detect certificate column
+        cert_column = None
+        for col in available_columns:
+            col_lower = col.lower().strip()
+            if any(keyword in col_lower for keyword in ['certificate', 'cert', 'number', 'no', 'code']):
+                cert_column = col
+                break
+        if not cert_column and len(available_columns) > 2:
+            cert_column = available_columns[2]
+
+        print(f"Detected columns - Name: {name_column}, Course: {course_column}, Cert: {cert_column}")
 
         # Process rows
-        for row in rows:
+        for index, row in enumerate(rows, 1):
             try:
-                # Handle different column name formats
-                first_name = row.get("first_name") or row.get("First Name") or row.get("First_Name")
-                last_name = row.get("last_name") or row.get("Last Name") or row.get("Last_Name")
-                course_name = row.get("course_name") or row.get("Course Name") or row.get("Course_Name")
-                course_summary = row.get("course_summary") or row.get("Course Summary") or row.get("Course_Summary")
-                year_of_study = row.get("year_of_study") or row.get("Year of Study") or row.get("Year_of_Study")
-                issuance_date = row.get("issuance_date") or row.get("Issuance Date") or row.get("Issuance_Date")
+                full_name = str(row.get(name_column, '')).strip() if name_column else ''
+                course_name = str(row.get(course_column, '')).strip() if course_column else ''
+                cert_num = str(row.get(cert_column, '')).strip() if cert_column else ''
 
-                # Validate required fields
-                if not all([first_name, last_name, course_name, issuance_date]):
-                    errors.append(f"Missing required fields for row: {row}")
+                if not full_name:
+                    errors.append(f"Row {index}: No name found in column '{name_column}'")
+                    continue
+                if not course_name:
+                    errors.append(f"Row {index}: No course found in column '{course_column}'")
                     continue
 
-                cert_num = generate_certificate_number(course_name)
+                # Parse name
+                name_parts = full_name.split()
+                first_name = name_parts[0] if name_parts else "Unknown"
+                last_name = ' '.join(name_parts[1:]) if len(name_parts) > 1 else "Student"
+
+                # Generate certificate number if not provided
+                if not cert_num:
+                    cert_num = generate_certificate_number(course_name)
+                else:
+                    # FIX: Check if certificate with this number already exists
+                    existing_cert = Certificate.query.filter_by(verification_code=cert_num).first()
+                    if existing_cert:
+                        errors.append(f"Row {index}: Certificate number '{cert_num}' already exists for student '{existing_cert.student_first_name} {existing_cert.student_last_name}'. Skipping.")
+                        continue
+
+                # Generate QR
                 qr_path = generate_certificate_qr(
-                    f"{first_name} {last_name}",
+                    full_name,
                     course_name,
                     cert_num,
-                    issuance_date
+                    datetime.now().date()
                 )
 
+                # Find or create student
+                student = Student.query.filter_by(
+                    first_name=first_name,
+                    last_name=last_name,
+                    course_name=course_name
+                ).first()
+
+                if not student:
+                    # Create a unique email
+                    base_email = f"{first_name.lower()}.{last_name.lower().replace(' ', '')}@example.com"
+                    email = base_email
+                    counter = 1
+                    
+                    # Ensure unique email
+                    while Student.query.filter_by(email=email).first():
+                        email = f"{first_name.lower()}.{last_name.lower().replace(' ', '')}{counter}@example.com"
+                        counter += 1
+                    
+                    student = Student(
+                        first_name=first_name,
+                        last_name=last_name,
+                        email=email,
+                        course_name=course_name,
+                        year_of_study="2025"
+                    )
+                    db.session.add(student)
+                    db.session.flush()
+
+                # FIX: Double-check certificate doesn't exist (in case of race condition)
+                existing_cert_final = Certificate.query.filter_by(verification_code=cert_num).first()
+                if existing_cert_final:
+                    errors.append(f"Row {index}: Certificate number '{cert_num}' already exists. Skipping.")
+                    continue
+
+                # Create certificate
                 cert = Certificate(
+                    student_id=student.id,
                     student_first_name=first_name,
                     student_last_name=last_name,
                     course_name=course_name,
-                    course_summary=course_summary,
-                    year_of_study=year_of_study,
+                    course_summary=f"Certificate for {course_name}",
+                    year_of_study="2025",
                     verification_code=cert_num,
                     qr_code_url=qr_path,
-                    issued_at=issuance_date
+                    issued_at=datetime.now().date()
                 )
 
                 db.session.add(cert)
                 created_count += 1
 
             except Exception as e:
-                errors.append(f"Error processing row {row}: {str(e)}")
+                errors.append(f"Row {index}: {str(e)}")
+                continue
 
         db.session.commit()
 
@@ -306,61 +337,200 @@ def import_certificates_csv():
             "message": "File processed successfully",
             "imported": created_count,
             "errors": errors,
-            "total_rows": len(rows)
+            "total_rows": len(rows),
+            "detected_columns": {
+                "name_column": name_column,
+                "course_column": course_column, 
+                "cert_column": cert_column
+            }
         })
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({
-            "error": f"Failed to process file: {str(e)}"
-        }), 500
+        return jsonify({"error": f"Failed to process file: {str(e)}"}), 500
 
+# use this version for production 
+
+    # 
 # def import_certificates_csv():
 #     file = request.files.get("file")
 
 #     if not file:
-#         return jsonify({"error": "CSV file is required"}), 400
+#         return jsonify({"error": "File is required"}), 400
 
-#     stream = StringIO(file.stream.read().decode("utf-8"))
-#     csv_reader = csv.DictReader(stream)
-
+#     filename = file.filename.lower()
 #     created_count = 0
 #     errors = []
 
-#     for row in csv_reader:
-#         try:
-#             cert_num = generate_certificate_number(row["course_name"])
-#             qr_path = generate_certificate_qr(
-#                 f"{row['first_name']} {row['last_name']}",
-#                 row["course_name"],
-#                 cert_num,
-#                 row["issuance_date"]
-#             )
+#     try:
+#         # Handle CSV files
+#         if filename.endswith('.csv'):
+#             file_content = file.read()
+#             encodings = ['utf-8', 'latin-1', 'iso-8859-1', 'cp1252', 'windows-1252']
+#             decoded_content = None
+            
+#             for encoding in encodings:
+#                 try:
+#                     decoded_content = file_content.decode(encoding)
+#                     break
+#                 except UnicodeDecodeError:
+#                     continue
+            
+#             if decoded_content is None:
+#                 return jsonify({"error": "Unable to decode CSV file. Try saving as UTF-8."}), 400
+            
+#             stream = StringIO(decoded_content)
+            
+#             # Try different delimiters
+#             sample = decoded_content[:1000]
+#             delimiter = ',' if ',' in sample else '\t' if '\t' in sample else ';'
+            
+#             csv_reader = csv.DictReader(stream, delimiter=delimiter)
+#             rows = list(csv_reader)
 
-#             cert = Certificate(
-#                 student_first_name=row["first_name"],
-#                 student_last_name=row["last_name"],
-#                 course_name=row["course_name"],
-#                 course_summary=row.get("course_summary"),
-#                 year_of_study=row.get("year_of_study"),
-#                 verification_code=cert_num,
-#                 qr_code_url=qr_path,
-#                 issued_at=row["issuance_date"]
-#             )
+#         # Handle Excel files
+#         elif filename.endswith(('.xlsx', '.xls')):
+#             df = pd.read_excel(file)
+#             rows = df.replace({pd.NA: None, float('nan'): None}).to_dict('records')
+        
+#         else:
+#             return jsonify({"error": "Unsupported file format."}), 400
 
-#             db.session.add(cert)
-#             created_count += 1
+#         if not rows:
+#             return jsonify({"error": "No data found in file"}), 400
 
-#         except Exception as e:
-#             errors.append(str(e))
+#         # Auto-detect column mapping
+#         first_row = rows[0]
+#         available_columns = list(first_row.keys())
+        
+#         print(f"Available columns: {available_columns}")
+#         print(f"First row: {first_row}")
 
-#     db.session.commit()
+#         # Auto-detect name column
+#         name_column = None
+#         for col in available_columns:
+#             col_lower = col.lower().strip()
+#             if any(keyword in col_lower for keyword in ['name', 'student', 'full']):
+#                 name_column = col
+#                 break
+#         if not name_column and available_columns:
+#             name_column = available_columns[0]
 
-#     return jsonify({
-#         "message": "CSV processed",
-#         "imported": created_count,
-#         "errors": errors
-#     })
+#         # Auto-detect course column
+#         course_column = None
+#         for col in available_columns:
+#             col_lower = col.lower().strip()
+#             if any(keyword in col_lower for keyword in ['department', 'course', 'program', 'dept']):
+#                 course_column = col
+#                 break
+#         if not course_column and len(available_columns) > 1:
+#             course_column = available_columns[1]
 
+#         # Auto-detect certificate column
+#         cert_column = None
+#         for col in available_columns:
+#             col_lower = col.lower().strip()
+#             if any(keyword in col_lower for keyword in ['certificate', 'cert', 'number', 'no', 'code']):
+#                 cert_column = col
+#                 break
+#         if not cert_column and len(available_columns) > 2:
+#             cert_column = available_columns[2]
 
+#         print(f"Detected columns - Name: {name_column}, Course: {course_column}, Cert: {cert_column}")
 
+#         # Process rows
+#         for index, row in enumerate(rows, 1):
+#             try:
+#                 full_name = str(row.get(name_column, '')).strip() if name_column else ''
+#                 course_name = str(row.get(course_column, '')).strip() if course_column else ''
+#                 cert_num = str(row.get(cert_column, '')).strip() if cert_column else ''
+
+#                 if not full_name:
+#                     errors.append(f"Row {index}: No name found in column '{name_column}'")
+#                     continue
+#                 if not course_name:
+#                     errors.append(f"Row {index}: No course found in column '{course_column}'")
+#                     continue
+
+#                 # Parse name
+#                 name_parts = full_name.split()
+#                 first_name = name_parts[0] if name_parts else "Unknown"
+#                 last_name = ' '.join(name_parts[1:]) if len(name_parts) > 1 else "Student"
+
+#                 # Generate certificate number if not provided
+#                 if not cert_num:
+#                     cert_num = generate_certificate_number(course_name)
+
+#                 # Generate QR
+#                 qr_path = generate_certificate_qr(
+#                     full_name,
+#                     course_name,
+#                     cert_num,
+#                     datetime.now().date()
+#                 )
+
+#                 # FIX: Find or create student first
+#                 student = Student.query.filter_by(
+#                     first_name=first_name,
+#                     last_name=last_name,
+#                     course_name=course_name
+#                 ).first()
+
+#                 if not student:
+#                     # Create a unique email
+#                     base_email = f"{first_name.lower()}.{last_name.lower().replace(' ', '')}@example.com"
+#                     email = base_email
+#                     counter = 1
+                    
+#                     # Ensure unique email
+#                     while Student.query.filter_by(email=email).first():
+#                         email = f"{first_name.lower()}.{last_name.lower().replace(' ', '')}{counter}@example.com"
+#                         counter += 1
+                    
+#                     student = Student(
+#                         first_name=first_name,
+#                         last_name=last_name,
+#                         email=email,
+#                         course_name=course_name,
+#                         year_of_study="2025"
+#                     )
+#                     db.session.add(student)
+#                     db.session.flush()  # Get the student ID without committing
+
+#                 # Create certificate WITH student_id
+#                 cert = Certificate(
+#                     student_id=student.id,  # THIS IS THE CRITICAL FIX
+#                     student_first_name=first_name,
+#                     student_last_name=last_name,
+#                     course_name=course_name,
+#                     course_summary=f"Certificate for {course_name}",
+#                     year_of_study="2025",
+#                     verification_code=cert_num,
+#                     qr_code_url=qr_path,
+#                     issued_at=datetime.now().date()
+#                 )
+
+#                 db.session.add(cert)
+#                 created_count += 1
+
+#             except Exception as e:
+#                 errors.append(f"Row {index}: {str(e)}")
+#                 continue
+
+#         db.session.commit()
+
+#         return jsonify({
+#             "message": "File processed successfully",
+#             "imported": created_count,
+#             "errors": errors,
+#             "total_rows": len(rows),
+#             "detected_columns": {
+#                 "name_column": name_column,
+#                 "course_column": course_column, 
+#                 "cert_column": cert_column
+#             }
+#         })
+
+#     except Exception as e:
+#         db.session.rollback()
+#         return jsonify({"error": f"Failed to process file: {str(e)}"}), 500

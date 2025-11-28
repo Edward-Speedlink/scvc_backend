@@ -25,8 +25,18 @@ verification_bp = Blueprint('verification_bp', __name__, url_prefix='/certificat
     }
 })
 def verify(code):
-    result = verify_certificate(code)
-    return jsonify(result)
+    try:
+        result = verify_certificate(code)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({
+            "status": "ERROR", 
+            "message": f"Internal server error: {str(e)}"
+        }), 500
+    
+# def verify(code):
+#     result = verify_certificate(code)
+#     return jsonify(result)
 
 
 
@@ -57,10 +67,25 @@ def verify(code):
     }
 })
 def verify_post():
-    data = request.get_json()
-    if not data or "certificate_code" not in data:
-        return jsonify({"error": "certificate_code is required"}), 400
+    try:
+        data = request.get_json()
+        if not data or "certificate_code" not in data:
+            return jsonify({"error": "certificate_code is required"}), 400
 
-    code = data["certificate_code"]
-    result = verify_certificate(code)
-    return jsonify(result)
+        code = data["certificate_code"]
+        result = verify_certificate(code)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({
+            "status": "ERROR",
+            "message": f"Internal server error: {str(e)}"
+        }), 500
+    
+# def verify_post():
+#     data = request.get_json()
+#     if not data or "certificate_code" not in data:
+#         return jsonify({"error": "certificate_code is required"}), 400
+
+#     code = data["certificate_code"]
+#     result = verify_certificate(code)
+#     return jsonify(result)

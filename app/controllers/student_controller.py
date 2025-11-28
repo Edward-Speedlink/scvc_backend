@@ -1,3 +1,4 @@
+from datetime import datetime
 from flask import request, jsonify
 from ..models.student import Student
 from ..models.certificate import Certificate
@@ -39,22 +40,94 @@ def list_students():
 # CREATE STUDENT
 # -------------------------
 def create_student():
-    data = request.json
-    student = Student(
-        first_name=data.get("first_name"),
-        last_name=data.get("last_name"),
-        email=data.get("email"),
-        phone_number=data.get("phone_number"),
-        course_name=data.get("course_name"),
-        year_of_study=data.get("year_of_study"),
-        program_start_date=data.get("program_start_date"),
-        program_end_date=data.get("program_end_date"),
-        photo_url=data.get("photo_url")
-    )
-    db.session.add(student)
-    db.session.commit()
+    try:
+        data = request.json
+        
+        # Check if student with email already exists
+        existing_student = Student.query.filter_by(email=data.get("email")).first()
+        if existing_student:
+            return {
+                "error": "Student with this email already exists",
+                "student_id": existing_student.id,
+                "existing_student": {
+                    "first_name": existing_student.first_name,
+                    "last_name": existing_student.last_name,
+                    "email": existing_student.email
+                }
+            }, 400
 
-    return {"message": "Student created successfully", "student_id": student.id}
+        # Validate required fields
+        required_fields = ["first_name", "last_name", "email", "course_name"]
+        missing_fields = [field for field in required_fields if not data.get(field)]
+        if missing_fields:
+            return {
+                "error": f"Missing required fields: {', '.join(missing_fields)}"
+            }, 400
+
+        # Parse dates if provided
+        program_start_date = None
+        program_end_date = None
+        
+        if data.get("program_start_date"):
+            try:
+                program_start_date = datetime.strptime(data.get("program_start_date"), '%Y-%m-%d').date()
+            except ValueError:
+                return {"error": "Invalid program_start_date format. Use YYYY-MM-DD"}, 400
+        
+        if data.get("program_end_date"):
+            try:
+                program_end_date = datetime.strptime(data.get("program_end_date"), '%Y-%m-%d').date()
+            except ValueError:
+                return {"error": "Invalid program_end_date format. Use YYYY-MM-DD"}, 400
+
+        student = Student(
+            first_name=data.get("first_name"),
+            last_name=data.get("last_name"),
+            email=data.get("email"),
+            phone_number=data.get("phone_number"),
+            course_name=data.get("course_name"),
+            year_of_study=data.get("year_of_study"),
+            program_start_date=program_start_date,
+            program_end_date=program_end_date,
+        )
+        
+        db.session.add(student)
+        db.session.commit()
+
+        return {
+            "message": "Student created successfully", 
+            "student_id": student.id,
+            "student": {
+                "first_name": student.first_name,
+                "last_name": student.last_name,
+                "email": student.email,
+                "course_name": student.course_name
+            }
+        }, 201
+
+    except Exception as e:
+        db.session.rollback()
+        return {
+            "error": f"Failed to create student: {str(e)}"
+        }, 500
+    
+# def create_student():
+#     data = request.json
+#     student = Student(
+#         first_name=data.get("first_name"),
+#         last_name=data.get("last_name"),
+#         email=data.get("email"),
+#         phone_number=data.get("phone_number"),
+#         course_name=data.get("course_name"),
+#         year_of_study=data.get("year_of_study"),
+#         program_start_date=data.get("program_start_date"),
+#         program_end_date=data.get("program_end_date"),
+#         # photo_url=data.get("photo_url")
+#     )
+#     db.session.add(student)
+#     db.session.commit()
+
+#     return {"message": "Student created successfully", "student_id": student.id}
 
 
 # -------------------------

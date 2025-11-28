@@ -4,41 +4,92 @@ from ..extensions import db
 from flask import request
 from datetime import datetime
 
+
 def verify_certificate(code):
-    cert = Certificate.query.filter_by(
-        verification_code=code,
-        is_active=True
-    ).first()
+    try:
+        # FIX: Remove is_active filter since it doesn't exist in your model
+        cert = Certificate.query.filter_by(
+            verification_code=code
+            # Remove: is_active=True - this field doesn't exist in your Certificate model
+        ).first()
 
-    ip = request.remote_addr
-    status = "VALID" if cert else "INVALID"
+        ip = request.remote_addr
+        status = "VALID" if cert else "INVALID"
 
-    # Log attempt
-    log = VerificationLog(
-        certificate_id=cert.id if cert else None,
-        verified_at=datetime.utcnow(),
-        ip_address=ip,
-        status=status
-    )
-    db.session.add(log)
-    db.session.commit()
+        # Log attempt
+        log = VerificationLog(
+            certificate_id=cert.id if cert else None,
+            verified_at=datetime.utcnow(),
+            ip_address=ip,
+            status=status
+        )
+        db.session.add(log)
+        db.session.commit()
 
-    if not cert:
+        if not cert:
+            return {
+                "status": "INVALID",
+                "message": "Certificate not found"
+            }
+
         return {
-            "status": "INVALID",
-            "certificate": None
+            "status": "VALID",
+            "certificate": {
+                "student_name": f"{cert.student_first_name} {cert.student_last_name}",
+                "course_name": cert.course_name,
+                "verification_code": cert.verification_code,
+                "issued_at": cert.issued_at.strftime("%Y-%m-%d") if cert.issued_at else None,
+                "qr_code_url": cert.qr_code_url,
+                "year_of_study": cert.year_of_study,
+                "course_summary": cert.course_summary
+            }
         }
 
-    return {
-        "status": "VALID",
-        "certificate": {
-            "student_name": cert.student_name,
-            "course_name": cert.course_name,
-            "verification_code": cert.verification_code,
-            "pdf_url": cert.pdf_url,
-            "image_url": cert.image_url,
-        }
-    }
+    except Exception as e:
+        db.session.rollback()
+        # Print the error for debugging
+        print(f"Verification error: {str(e)}")
+        return {
+            "status": "ERROR",
+            "message": f"Verification failed: {str(e)}"
+        }, 500
+    
+# def verify_certificate(code):
+#     cert = Certificate.query.filter_by(
+#         verification_code=code,
+#         is_active=True
+#     ).first()
+
+#     ip = request.remote_addr
+#     status = "VALID" if cert else "INVALID"
+
+#     # Log attempt
+#     log = VerificationLog(
+#         certificate_id=cert.id if cert else None,
+#         verified_at=datetime.utcnow(),
+#         ip_address=ip,
+#         status=status
+#     )
+#     db.session.add(log)
+#     db.session.commit()
+
+#     if not cert:
+#         return {
+#             "status": "INVALID",
+#             "certificate": None
+#         }
+
+#     return {
+#         "status": "VALID",
+#         "certificate": {
+#             "student_name": cert.student_name,
+#             "course_name": cert.course_name,
+#             "verification_code": cert.verification_code,
+#             "pdf_url": cert.pdf_url,
+#             "image_url": cert.image_url,
+#             "qr_code_url": cert.qr_code_url,
+#         }
+#     }
 
 
 
