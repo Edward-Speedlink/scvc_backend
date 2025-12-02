@@ -5,7 +5,8 @@ from flasgger import swag_from
 
 verification_bp = Blueprint('verification_bp', __name__, url_prefix='/certificate')
 
-@verification_bp.get('/<code>')
+
+@verification_bp.get('/<path:code>')
 @swag_from({
     "tags": ["Verification"],
     "summary": "Verify a certificate",
@@ -16,7 +17,7 @@ verification_bp = Blueprint('verification_bp', __name__, url_prefix='/certificat
             "in": "path",
             "type": "string",
             "required": True,
-            "description": "Certificate verification code"
+            "description": "Certificate verification code (can contain slashes)"
         }
     ],
     "responses": {
@@ -34,10 +35,34 @@ def verify(code):
             "message": f"Internal server error: {str(e)}"
         }), 500
     
+# @verification_bp.get('/<code>')
+# @swag_from({
+#     "tags": ["Verification"],
+#     "summary": "Verify a certificate",
+#     "description": "Checks if a certificate is valid by verification code.",
+#     "parameters": [
+#         {
+#             "name": "code",
+#             "in": "path",
+#             "type": "string",
+#             "required": True,
+#             "description": "Certificate verification code"
+#         }
+#     ],
+#     "responses": {
+#         "200": {"description": "Verification result returned"},
+#         "404": {"description": "Certificate not found"}
+#     }
+# })
 # def verify(code):
-#     result = verify_certificate(code)
-#     return jsonify(result)
-
+#     try:
+#         result = verify_certificate(code)
+#         return jsonify(result)
+#     except Exception as e:
+#         return jsonify({
+#             "status": "ERROR", 
+#             "message": f"Internal server error: {str(e)}"
+#         }), 500
 
 
 # --- POST route (code in JSON body) ---
