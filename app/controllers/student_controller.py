@@ -18,8 +18,20 @@ def list_students():
 
     students = []
     for s in all_students:
+        # Get student_id from first certificate if exists
+        student_id = None
+        if s.certificates:
+            # Take the verification code from the first certificate
+            verification_code = s.certificates[0].verification_code
+            # Remove "SHSL/" prefix if present
+            if verification_code.startswith("SHSL/"):
+                student_id = verification_code[5:]  # "25B/DM/0027"
+            else:
+                student_id = verification_code
+        
         students.append({
             "id": s.id,
+            "student_id": student_id,  # Add the extracted student_id
             "first_name": s.first_name,
             "last_name": s.last_name,
             "email": s.email,
@@ -28,7 +40,8 @@ def list_students():
             "year_of_study": s.year_of_study,
             "status": "Certified" if s.certificates else "Not Certified",
             "created_at": s.created_at.strftime("%Y-%m-%d %H:%M:%S") if s.created_at else None,
-            "certificate_count": len(s.certificates) if s.certificates else 0
+            "certificate_count": len(s.certificates) if s.certificates else 0,
+            "verification_code": s.certificates[0].verification_code if s.certificates else None  # Optional: include full code
         })
 
     return jsonify({
@@ -37,16 +50,16 @@ def list_students():
     })
 
 # def list_students():
-#     page = int(request.args.get("page", 1))
-#     limit = int(request.args.get("limit", 10))
+#     # Remove pagination parameters
 #     query = Student.query.order_by(Student.created_at.desc())
-#     paginated = query.paginate(page=page, per_page=limit, error_out=False)
+    
+#     # Get all students
+#     all_students = query.all()
 
 #     students = []
-#     for s in paginated.items:
+#     for s in all_students:
 #         students.append({
 #             "id": s.id,
-#             # "student_id":
 #             "first_name": s.first_name,
 #             "last_name": s.last_name,
 #             "email": s.email,
@@ -54,15 +67,15 @@ def list_students():
 #             "course_name": s.course_name,
 #             "year_of_study": s.year_of_study,
 #             "status": "Certified" if s.certificates else "Not Certified",
-#             "created_at": s.created_at
+#             "created_at": s.created_at.strftime("%Y-%m-%d %H:%M:%S") if s.created_at else None,
+#             "certificate_count": len(s.certificates) if s.certificates else 0
 #         })
 
 #     return jsonify({
-#         "total": paginated.total,
-#         "page": page,
-#         "limit": limit,
-#         "students": len(students)
+#         "students": students,
+#         "count": len(students)
 #     })
+
 
 # -------------------------
 # CREATE STUDENT
