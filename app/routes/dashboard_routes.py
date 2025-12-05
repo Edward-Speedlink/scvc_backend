@@ -53,7 +53,7 @@ def certificates():
     return jsonify(certificates_table())
 
 
-@dashboard_bp.put("/certificate/<int:cert_id>")
+@dashboard_bp.put("/certificate/<path:code>")
 @swag_from({
     "tags": ["Dashboard"],
     "summary": "Edit a certificate",
@@ -95,7 +95,7 @@ def edit_certificate(cert_id):
     return jsonify({"message": "Certificate updated successfully"})
 
 
-@dashboard_bp.delete("/certificate/<int:cert_id>")
+@dashboard_bp.delete("/certificate/<path:code>")
 @swag_from({
     "tags": ["Dashboard"],
     "summary": "Delete a certificate",

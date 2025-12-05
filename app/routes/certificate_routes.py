@@ -67,7 +67,7 @@ def create_cert():
 def list_cert():
     return list_certificates()
 
-@certificate_bp.put("/certificates/<int:cert_id>")
+@certificate_bp.put("/certificates/<path:code>")
 @swag_from({
     "tags": ["Certificates"],
     "summary": "Update a certificate",
@@ -100,7 +100,7 @@ def update_cert(cert_id):
     return update_certificate(cert_id)
 
 
-@certificate_bp.delete("/certificates/<int:cert_id>")
+@certificate_bp.delete("/certificates/<path:code>")
 @swag_from({
     "tags": ["Certificates"],
     "summary": "Delete a certificate",
