@@ -187,58 +187,136 @@ def list_certificates():
 # ===================================
 # EDIT CERTIFICATE
 # ===================================
+# ===================================
+# EDIT CERTIFICATE (UPDATES ALL FIELDS, NO QR)
+# ===================================
 def update_certificate(code):
-    cert = Certificate.query.get_or_404(code)
-    data = request.get_json()
-
-    old_first_name = cert.student_first_name
-    old_last_name = cert.student_last_name
-    old_course_name = cert.course_name
-    old_verification_code = cert.verification_code
-
-    # Update basic fields
-    cert.student_first_name = data.get("first_name", cert.student_first_name)
-    cert.student_last_name = data.get("last_name", cert.student_last_name)
-    cert.course_name = data.get("course_name", cert.course_name)
-    cert.course_summary = data.get("course_summary", cert.course_summary)
-    cert.year_of_study = data.get("year_of_study", cert.year_of_study)
+    # Find certificate by verification code
+    cert = Certificate.query.filter_by(verification_code=code).first()
     
-    # NEW: Check if verification_code should be updated
+    if not cert:
+        return jsonify({"error": "Certificate not found"}), 404
+    
+    data = request.get_json()
+    
+    # Track what changes were made
+    changes = {}
+    
+    # Store old values for comparison
+    old_values = {
+        "verification_code": cert.verification_code,
+        "student_first_name": cert.student_first_name,
+        "student_last_name": cert.student_last_name,
+        "course_name": cert.course_name,
+        "course_summary": cert.course_summary,
+        "year_of_study": cert.year_of_study
+    }
+    
+    # 1. Update verification_code if provided
     new_verification_code = data.get("verification_code")
-    if new_verification_code and new_verification_code != old_verification_code:
-        # Check if new code already exists
+    if new_verification_code and new_verification_code != cert.verification_code:
+        # Check if new code already exists for another certificate
         existing = Certificate.query.filter_by(verification_code=new_verification_code).first()
         if existing and existing.id != cert.id:
-            return jsonify({"error": "Verification code already exists"}), 400
+            return jsonify({
+                "error": f"Verification code '{new_verification_code}' already exists for another certificate"
+            }), 400
         
+        changes["verification_code"] = {
+            "from": cert.verification_code,
+            "to": new_verification_code
+        }
         cert.verification_code = new_verification_code
-
-    # Regenerate QR if any of these changed
-    if (cert.student_first_name != old_first_name or 
-        cert.student_last_name != old_last_name or 
-        cert.course_name != old_course_name or
-        cert.verification_code != old_verification_code):
-        
-        # Delete old QR code from Google Drive
-        if cert.qr_code_url and 'google.com' in cert.qr_code_url:
-            drive_service.delete_file_by_url(cert.qr_code_url)
-        
-        # Generate new QR code
-        new_qr_url = generate_certificate_qr(
-            f"{cert.student_first_name} {cert.student_last_name}",
-            cert.course_name,
-            cert.verification_code,  # Use updated code
-            cert.issued_at
-        )
-        cert.qr_code_url = new_qr_url
-
+    
+    # 2. Update student first name if provided
+    new_first_name = data.get("first_name")
+    if new_first_name and new_first_name != cert.student_first_name:
+        changes["first_name"] = {
+            "from": cert.student_first_name,
+            "to": new_first_name
+        }
+        cert.student_first_name = new_first_name
+    
+    # 3. Update student last name if provided
+    new_last_name = data.get("last_name")
+    if new_last_name and new_last_name != cert.student_last_name:
+        changes["last_name"] = {
+            "from": cert.student_last_name,
+            "to": new_last_name
+        }
+        cert.student_last_name = new_last_name
+    
+    # 4. Update course name if provided
+    new_course_name = data.get("course_name")
+    if new_course_name and new_course_name != cert.course_name:
+        changes["course_name"] = {
+            "from": cert.course_name,
+            "to": new_course_name
+        }
+        cert.course_name = new_course_name
+    
+    # 5. Update course summary if provided
+    new_course_summary = data.get("course_summary")
+    if new_course_summary is not None and new_course_summary != cert.course_summary:
+        changes["course_summary"] = {
+            "from": cert.course_summary,
+            "to": new_course_summary
+        }
+        cert.course_summary = new_course_summary
+    
+    # 6. Update year of study if provided
+    new_year_of_study = data.get("year_of_study")
+    if new_year_of_study and new_year_of_study != cert.year_of_study:
+        changes["year_of_study"] = {
+            "from": cert.year_of_study,
+            "to": new_year_of_study
+        }
+        cert.year_of_study = new_year_of_study
+    
+    # 7. Update student email (if you have this field)
+    # Note: This depends on your model structure
+    # If email is in Certificate model:
+    # new_email = data.get("email")
+    # if new_email and new_email != cert.email:
+    #     changes["email"] = {"from": cert.email, "to": new_email}
+    #     cert.email = new_email
+    
+    # SKIP QR CODE REGENERATION - Comment out or remove this block entirely
+    # if (cert.student_first_name != old_values["student_first_name"] or 
+    #     cert.student_last_name != old_values["student_last_name"] or 
+    #     cert.course_name != old_values["course_name"] or
+    #     cert.verification_code != old_values["verification_code"]):
+    #     
+    #     # Delete old QR code from Google Drive
+    #     if cert.qr_code_url and 'google.com' in cert.qr_code_url:
+    #         drive_service.delete_file_by_url(cert.qr_code_url)
+    #     
+    #     # Generate new QR code
+    #     new_qr_url = generate_certificate_qr(
+    #         f"{cert.student_first_name} {cert.student_last_name}",
+    #         cert.course_name,
+    #         cert.verification_code,
+    #         cert.issued_at
+    #     )
+    #     cert.qr_code_url = new_qr_url
+    
     db.session.commit()
-
-    return jsonify({
-        "message": "Certificate updated successfully", 
-        "qr_code_url": cert.qr_code_url,
-        "verification_code": cert.verification_code
-    })
+    
+    # Prepare response
+    response_data = {
+        "success": True,
+        "message": "Certificate updated successfully",
+        "certificate_id": cert.id,
+        "verification_code": cert.verification_code,
+        "changes": changes if changes else "No changes made"
+    }
+    
+    # Only add QR URL if it exists and wasn't regenerated
+    if cert.qr_code_url:
+        response_data["qr_code_url"] = cert.qr_code_url
+        response_data["note"] = "QR code not regenerated during update"
+    
+    return jsonify(response_data)
 
 # def update_certificate(cert_id):
 #     cert = Certificate.query.get_or_404(cert_id)
